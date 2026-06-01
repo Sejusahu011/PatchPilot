@@ -58,7 +58,8 @@ export async function scanRepoUrl(
   });
 
   if (!res.ok) {
-    throw new Error(await res.text());
+    const err = await res.json().catch(() => null);
+    throw new Error(err?.detail ?? "Import from URL failed");
   }
 
   return (await res.json()) as ScanResponse;

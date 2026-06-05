@@ -4,6 +4,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { scanRepoUrl, scanZip } from "../lib/api";
 import { saveLastScan } from "../lib/scan-store";
 import { Button } from "../components/ui/button";
+import { TrendChart } from "../components/trend-chart";
 import {
   Card,
   CardContent,
@@ -347,7 +348,7 @@ export function Dashboard() {
           </div>
         </CardContent>
       </Card>
-
+        <TrendChart />
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <div>

@@ -131,3 +131,14 @@ export async function downloadEvidencePack(
 
   return { blob, filename };
 }
+
+export type TrendData = {
+  date: string;
+  findings: number;
+};
+
+export async function getTrends(limit = 6) {
+  const res = await fetch(`${API_BASE}/trends?limit=${limit}`);
+  if (!res.ok) throw new Error(await res.text());
+  return (await res.json()) as TrendData[];
+}

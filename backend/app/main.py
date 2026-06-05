@@ -15,7 +15,7 @@ from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
-from .db import init_db, get_db
+from .db import init_db, get_db, get_trend_data
 from .models import ScanResponse, Finding, FixRequest, FixResponse, VerifyResponse
 from .remediation.engine import propose_fixes
 from .reports.evidence_pack import build_evidence_pack
@@ -286,6 +286,52 @@ async def scan_url(
 
     semgrep, osv, gitleaks, findings = _scan_repo_dir(scan_root)
 
+# NEW: Save to Database so the Trend Chart works!
+    try:
+        db = await get_db()
+        try:
+            await db.execute(
+                "INSERT INTO jobs (job_id, project_name, scan_method) VALUES (?, ?, ?)",
+                (job_id, project_name, "url"),
+            )
+            rows = []
+            for f in findings:
+                engine = (f.metadata or {}).get("engine")
+                scanner = {"osv-scanner": "osv"}.get(engine, engine)
+                rule_id = (
+                    (f.metadata or {}).get("check_id")
+                    or (f.metadata or {}).get("rule")
+                    or (f.metadata or {}).get("osv_id")
+                    or f.title
+                )
+                file_path = f.location.path if f.location else None
+                line_number = f.location.start_line if f.location else None
+                message = f.description or f.title
+                rows.append(
+                    (
+                        str(uuid.uuid4()),
+                        job_id,
+                        rule_id,
+                        f.severity,
+                        f.category,
+                        file_path,
+                        line_number,
+                        None,
+                        scanner,
+                        message,
+                    )
+                )
+            if rows:
+                await db.executemany(
+                    "INSERT INTO findings (id, job_id, rule_id, severity, category, file_path, line_number, cwe, scanner, message) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    rows,
+                )
+            await db.commit()
+        finally:
+            await db.close()
+    except Exception:
+        logger.exception("DB write failed for job %s", job_id)
+
     return ScanResponse(
         job_id=job_id,
         project_name=project_name,
@@ -480,3 +526,9 @@ def delete_job(job_id: str):
     if job_dir.exists():
         safe_rmtree(job_dir)
     return {"deleted": True}
+
+@app.get("/trends")
+async def get_trends_endpoint(limit: int = 6):
+    """Fetches historical trend data for the frontend dashboard."""
+    data = await get_trend_data(limit)
+    return data

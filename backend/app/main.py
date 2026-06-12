@@ -211,7 +211,6 @@ async def download_to_path(url: str, dest_path: Path, max_retries: int = 5) -> N
 
                     r = await client.get(current_url)
 
-                    # Handle Redirects
                     if r.status_code in (301, 302, 303, 307, 308):
                         location = r.headers.get("location")
                         if not location:
@@ -222,22 +221,18 @@ async def download_to_path(url: str, dest_path: Path, max_retries: int = 5) -> N
                         current_url = str(location)
                         continue
 
-                    # Handle Rate Limits (Break inner loop to trigger outer retry logic)
                     if r.status_code in (403, 429):
                         break
 
-                    # Handle Hard Errors
                     if r.status_code != 200:
                         raise HTTPException(
                             status_code=400,
                             detail=f"Failed to download repo ZIP ({r.status_code}).",
                         )
 
-                    # Success
                     dest_path.write_bytes(r.content)
                     return
 
-                # If we broke out of the redirect loop due to a rate limit:
                 if r.status_code in (403, 429):
                     if attempt == max_retries - 1:
                         raise HTTPException(
@@ -258,7 +253,6 @@ async def download_to_path(url: str, dest_path: Path, max_retries: int = 5) -> N
                 )
 
             except httpx.RequestError as e:
-                # Network level failures (timeouts, connection dropped)
                 if attempt == max_retries - 1:
                     raise HTTPException(
                         status_code=400, detail=f"Network error downloading repo: {e}"
@@ -1117,8 +1111,6 @@ async def get_org_summary(org_job_id: str):
     db = await get_db()
     try:
         db.row_factory = aiosqlite.Row
-
-        # 1. Get total, completed, and failed repos
         cur = await db.execute(
             """
             SELECT 
@@ -1132,7 +1124,6 @@ async def get_org_summary(org_job_id: str):
         )
         repo_stats = await cur.fetchone()
 
-        # 2. Get severity distribution across the entire org
         cur = await db.execute(
             """
             SELECT f.severity, COUNT(f.id) as count
@@ -1146,7 +1137,6 @@ async def get_org_summary(org_job_id: str):
         severity_rows = await cur.fetchall()
         severities = {r["severity"].lower(): r["count"] for r in severity_rows}
 
-        # 3. Top 5 most vulnerable repos
         cur = await db.execute(
             """
             SELECT j.project_name as repo_name, COUNT(f.id) as count

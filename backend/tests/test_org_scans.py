@@ -140,8 +140,6 @@ def test_stream_org_status(mock_get_db, client):
 def test_get_org_summary(mock_get_db, client):
     mock_db = AsyncMock()
     mock_get_db.return_value = mock_db
-
-    # Mocking the 3 sequential database queries: Stats, Severity, Leaderboard
     mock_cursor_1 = AsyncMock()
     mock_cursor_1.fetchone.return_value = {"total": 10, "completed": 8, "failed": 2}
 
@@ -167,8 +165,6 @@ def test_get_org_summary(mock_get_db, client):
 def test_get_org_findings(mock_get_db, client):
     mock_db = AsyncMock()
     mock_get_db.return_value = mock_db
-
-    # Mocking the findings join query
     mock_cursor = AsyncMock()
     mock_cursor.fetchall.return_value = [
         {

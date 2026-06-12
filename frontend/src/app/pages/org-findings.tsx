@@ -62,10 +62,7 @@ export function OrgFindings() {
     );
   }
 
-  // Get unique repos for the filter dropdown
   const uniqueRepos = Array.from(new Set(findings.map(f => f.repo_name)));
-  
-  // Filter the table based on dropdown selection
   const filteredFindings = repoFilter === "ALL" 
     ? findings 
     : findings.filter(f => f.repo_name === repoFilter);
@@ -87,8 +84,6 @@ export function OrgFindings() {
           </p>
         </div>
       </div>
-
-      {/* KPI Scorecards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
         <Card className="bg-muted/30 border-border/50">
           <CardContent className="p-6 flex items-center gap-4">
@@ -129,7 +124,6 @@ export function OrgFindings() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        {/* Top Vulnerable Repos Leaderboard */}
         <Card className="md:col-span-2 shadow-sm">
           <CardHeader>
             <CardTitle className="text-lg">Top Vulnerable Repositories</CardTitle>
@@ -151,8 +145,6 @@ export function OrgFindings() {
             </div>
           </CardContent>
         </Card>
-
-        {/* Severity Distribution */}
         <Card className="shadow-sm">
           <CardHeader>
             <CardTitle className="text-lg">Severity Breakdown</CardTitle>

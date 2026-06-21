@@ -88,6 +88,10 @@ async def init_db():
             await db.execute(
                 "ALTER TABLE jobs ADD COLUMN status TEXT DEFAULT 'completed'"
             )
+        if "raw_finding_count" not in job_columns:
+            await db.execute("ALTER TABLE jobs ADD COLUMN raw_finding_count INTEGER")
+        if "finding_count" not in job_columns:
+            await db.execute("ALTER TABLE jobs ADD COLUMN finding_count INTEGER")
 
         await db.commit()
 

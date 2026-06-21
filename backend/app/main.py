@@ -30,6 +30,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response, StreamingResponse
 from pydantic import BaseModel, Field
 
+from app.ml.deduplicator import SENTENCE_TRANSFORMERS_AVAILABLE, deduplicate
 from app.ml.ranker import load_ranker, scoring_function
 
 from .db import (
@@ -399,6 +400,19 @@ async def _run_single_scan_task(
             _scan_repo_dir, scan_root, update_progress
         )
 
+        raw_finding_count = len(findings)
+
+        disable_dedup = os.environ.get("DISABLE_DEDUP", "").lower() == "true"
+        try:
+            epsilon = float(os.environ.get("DEDUP_EPSILON", 0.15))
+        except ValueError:
+            epsilon = 0.15
+
+        if not disable_dedup and SENTENCE_TRANSFORMERS_AVAILABLE:
+            findings = deduplicate(findings, epsilon)
+
+        finding_count = len(findings)
+
         db = await get_db()
         try:
             rows = []
@@ -438,17 +452,32 @@ async def _run_single_scan_task(
                     "INSERT INTO findings (id, job_id, rule_id, severity, category, file_path, line_number, cwe, scanner, message, package_name, package_version) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     rows,
                 )
+            await db.execute(
+                "UPDATE jobs SET status = 'completed', raw_finding_count = ?, finding_count = ? WHERE job_id = ?",
+                (raw_finding_count, finding_count, job_id),
+            )
             await db.commit()
         finally:
             await db.close()
 
         if job_id in ACTIVE_SCANS:
             ACTIVE_SCANS[job_id]["status"] = "completed"
-            ACTIVE_SCANS[job_id]["findings_count"] = len(findings)
+            ACTIVE_SCANS[job_id]["findings_count"] = finding_count
     except Exception:
         logger.exception("Failed scan task for %s", job_id)
         if job_id in ACTIVE_SCANS:
             ACTIVE_SCANS[job_id]["status"] = "failed"
+        try:
+            db = await get_db()
+            try:
+                await db.execute(
+                    "UPDATE jobs SET status = 'failed' WHERE job_id = ?", (job_id,)
+                )
+                await db.commit()
+            finally:
+                await db.close()
+        except Exception:
+            logger.exception("Failed to write failed status for job %s", job_id)
 
 
 @app.post("/scan")
@@ -740,13 +769,34 @@ async def download_audit_pdf(job_id: str):
 async def get_findings(job_id: str):
     db = await get_db()
     try:
-        cur = await db.execute("SELECT job_id FROM jobs WHERE job_id = ?", (job_id,))
+        cur = await db.execute(
+            "SELECT job_id, raw_finding_count, finding_count FROM jobs WHERE job_id = ?",
+            (job_id,),
+        )
         job_row = await cur.fetchone()
 
         if job_row is None:
             raise HTTPException(
                 status_code=404, detail=f"No job found with id '{job_id}'"
             )
+
+        raw_finding_count = None
+        finding_count = None
+        if job_row is not None:
+            if hasattr(job_row, "keys") or isinstance(job_row, dict):
+                try:
+                    raw_finding_count = job_row["raw_finding_count"]
+                except (KeyError, IndexError):
+                    pass
+                try:
+                    finding_count = job_row["finding_count"]
+                except (KeyError, IndexError):
+                    pass
+            else:
+                if len(job_row) > 1:
+                    raw_finding_count = job_row[1]
+                if len(job_row) > 2:
+                    finding_count = job_row[2]
 
         cur = await db.execute(
             """
@@ -764,7 +814,18 @@ async def get_findings(job_id: str):
         await db.close()
 
     findings = [dict(zip(columns, row)) for row in rows]
-    return {"job_id": job_id, "finding_count": len(findings), "findings": findings}
+
+    if raw_finding_count is None:
+        raw_finding_count = len(findings)
+    if finding_count is None:
+        finding_count = len(findings)
+
+    return {
+        "job_id": job_id,
+        "raw_finding_count": raw_finding_count,
+        "finding_count": finding_count,
+        "findings": findings,
+    }
 
 
 @app.get("/jobs/{job_id}/verify")
@@ -940,6 +1001,19 @@ async def _run_repo_scan_task(
             scan_root = _maybe_use_single_top_folder(repo_dir)
             semgrep, osv, gitleaks, entropy, findings = _scan_repo_dir(scan_root)
 
+            raw_finding_count = len(findings)
+
+            disable_dedup = os.environ.get("DISABLE_DEDUP", "").lower() == "true"
+            try:
+                epsilon = float(os.environ.get("DEDUP_EPSILON", 0.15))
+            except ValueError:
+                epsilon = 0.15
+
+            if not disable_dedup and SENTENCE_TRANSFORMERS_AVAILABLE:
+                findings = deduplicate(findings, epsilon)
+
+            finding_count = len(findings)
+
             deps = _extract_dependencies(scan_root)
 
             db = await get_db()
@@ -997,7 +1071,8 @@ async def _run_repo_scan_task(
                     )
 
                 await db.execute(
-                    "UPDATE jobs SET status = 'completed' WHERE job_id = ?", (job_id,)
+                    "UPDATE jobs SET status = 'completed', raw_finding_count = ?, finding_count = ? WHERE job_id = ?",
+                    (raw_finding_count, finding_count, job_id),
                 )
                 await db.commit()
             finally:

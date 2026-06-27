@@ -225,11 +225,13 @@ def _extract_dependencies(repo_dir: Path) -> List[tuple[str, str]]:
 ACTIVE_SCANS = {}
 
 
-def _scan_repo_dir(repo_dir: Path, progress_cb=None, job_dir: Path = None):
+def _scan_repo_dir(
+    repo_dir: Path, progress_cb=None, job_dir: Path = None, raw_dir_name: str = "raw"
+):
     if progress_cb:
         progress_cb("sast", "in_progress")
 
-    semgrep_raw_out = (job_dir / "raw" / "semgrep.json") if job_dir else None
+    semgrep_raw_out = (job_dir / raw_dir_name / "semgrep.json") if job_dir else None
     semgrep = run_semgrep(repo_dir, raw_out=semgrep_raw_out)
 
     if progress_cb:
@@ -238,7 +240,7 @@ def _scan_repo_dir(repo_dir: Path, progress_cb=None, job_dir: Path = None):
     if progress_cb:
         progress_cb("dependency", "in_progress")
 
-    osv_raw_out = (job_dir / "raw" / "osv.json") if job_dir else None
+    osv_raw_out = (job_dir / raw_dir_name / "osv.json") if job_dir else None
     osv = run_osv_scanner(repo_dir, raw_out=osv_raw_out)
 
     if progress_cb:
@@ -247,7 +249,7 @@ def _scan_repo_dir(repo_dir: Path, progress_cb=None, job_dir: Path = None):
     if progress_cb:
         progress_cb("secrets", "in_progress")
 
-    gitleaks_raw_out = (job_dir / "raw" / "gitleaks.json") if job_dir else None
+    gitleaks_raw_out = (job_dir / raw_dir_name / "gitleaks.json") if job_dir else None
     gitleaks = run_gitleaks(repo_dir, raw_out=gitleaks_raw_out)
 
     if progress_cb:
@@ -717,7 +719,9 @@ async def verify(
     baseline_job_id = baseline_job_id or job_id
     baseline_findings = await get_baseline_findings(baseline_job_id)
 
-    _, _, _, _, findings = _scan_repo_dir(repo_dir)
+    _, _, _, _, findings = _scan_repo_dir(
+        repo_dir, job_dir=job_dir, raw_dir_name="raw_verify"
+    )
 
     current_findings = {finding_key(f) for f in findings}
 
@@ -731,6 +735,19 @@ async def verify(
     )
 
     passed = 1 if result.ok and new_issues_introduced == 0 else 0
+
+    verify_dir = job_dir / "raw_verify"
+    verify_dir.mkdir(parents=True, exist_ok=True)
+    verify_report = {
+        "verified_at": datetime.now(timezone.utc).isoformat(),
+        "passed": bool(passed),
+        "new_issues_introduced": new_issues_introduced,
+        "baseline_job_id": baseline_job_id,
+    }
+    (verify_dir / "verification-report.json").write_text(
+        json.dumps(verify_report, indent=2), encoding="utf-8"
+    )
+
     try:
         db = await get_db()
         try:

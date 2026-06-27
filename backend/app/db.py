@@ -83,7 +83,7 @@ async def init_db():
                 finding_id      TEXT NOT NULL,
                 diff_line_count INTEGER,
                 diff_file_count INTEGER,
-                fix_type        TEXT,   -- 'replace' | 'insert' | 'delete' | 'mixed'
+                fix_type        TEXT,   -- 'insert' | 'delete' | 'mixed' | 'none'
                 created_at      TEXT DEFAULT (datetime('now'))
             )
         """)

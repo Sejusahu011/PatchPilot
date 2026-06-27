@@ -691,7 +691,9 @@ async def _record_fixes_to_db(job_id: str, fixes: List[Fix]):
                 files = f.files_changed
                 diff_file_count = len(files) if files else 0
 
-                if adds > 0 and dels == 0:
+                if adds == 0 and dels == 0:
+                    fix_type = "none"
+                elif adds > 0 and dels == 0:
                     fix_type = "insert"
                 elif dels > 0 and adds == 0:
                     fix_type = "delete"

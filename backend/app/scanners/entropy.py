@@ -42,25 +42,33 @@ def is_allowlisted(token: str) -> bool:
         return True
     return False
 
+
 def run_entropy(repo_dir: Path) -> List[Finding]:
+    """
+    Scan the repository directory for files containing high entropy strings.
+
+    Args:
+        repo_dir: Path to the directory to scan.
+
+    Returns:
+        A list of Finding objects discovered during the scan.
+    """
     findings: List[Finding] = []
     ignored_extensions = {
         ".png", ".jpg", ".jpeg", ".gif", ".ico", ".svg", ".zip",
         ".tar", ".gz", ".mp4", ".pdf", ".woff", ".woff2", ".eot", ".ttf",
     }
-    
     ignored_dirs = {
-        "node_modules", "venv", ".venv", "build", "dist", 
+        "node_modules", "venv", ".venv", "build", "dist",
         "target", ".next", ".cache", "coverage", "vendor", "__pycache__", ".git"
     }
 
-    MAX_FILE_SIZE = 1 * 1024 * 1024 
+    MAX_FILE_SIZE = 1 * 1024 * 1024
 
     for file_path in repo_dir.rglob("*"):
-       
         if any(part in ignored_dirs for part in file_path.parts):
             continue
-            
+
         if (
             not file_path.is_file()
             or file_path.suffix.lower() in ignored_extensions
@@ -85,14 +93,13 @@ def run_entropy(repo_dir: Path) -> List[Finding]:
                             finding_id = f"entropy:high-entropy-string:{relative_path}:{line_idx}"
                             severity = "HIGH"
 
-                            raw_data_for_extractor = {
+                            raw_data = {
                                 "id": finding_id,
                                 "severity": severity,
                                 "location": {"path": relative_path},
                                 "metadata": {"cwe_category": "CWE-798"},
                             }
-
-                            ml_features = extract_features(raw_data_for_extractor, scanner_name="entropy")
+                            ml_features = extract_features(raw_data, scanner_name="entropy")
 
                             findings.append(
                                 Finding(

@@ -55,12 +55,35 @@ def run_entropy(repo_dir: Path) -> List[Finding]:
     """
     findings: List[Finding] = []
     ignored_extensions = {
-        ".png", ".jpg", ".jpeg", ".gif", ".ico", ".svg", ".zip",
-        ".tar", ".gz", ".mp4", ".pdf", ".woff", ".woff2", ".eot", ".ttf",
+        ".png",
+        ".jpg",
+        ".jpeg",
+        ".gif",
+        ".ico",
+        ".svg",
+        ".zip",
+        ".tar",
+        ".gz",
+        ".mp4",
+        ".pdf",
+        ".woff",
+        ".woff2",
+        ".eot",
+        ".ttf",
     }
     ignored_dirs = {
-        "node_modules", "venv", ".venv", "build", "dist",
-        "target", ".next", ".cache", "coverage", "vendor", "__pycache__", ".git"
+        "node_modules",
+        "venv",
+        ".venv",
+        "build",
+        "dist",
+        "target",
+        ".next",
+        ".cache",
+        "coverage",
+        "vendor",
+        "__pycache__",
+        ".git",
     }
 
     MAX_FILE_SIZE = 1 * 1024 * 1024
@@ -69,10 +92,7 @@ def run_entropy(repo_dir: Path) -> List[Finding]:
         if any(part in ignored_dirs for part in file_path.parts):
             continue
 
-        if (
-            not file_path.is_file()
-            or file_path.suffix.lower() in ignored_extensions
-        ):
+        if not file_path.is_file() or file_path.suffix.lower() in ignored_extensions:
             continue
 
         if file_path.stat().st_size > MAX_FILE_SIZE:
@@ -99,7 +119,9 @@ def run_entropy(repo_dir: Path) -> List[Finding]:
                                 "location": {"path": relative_path},
                                 "metadata": {"cwe_category": "CWE-798"},
                             }
-                            ml_features = extract_features(raw_data, scanner_name="entropy")
+                            ml_features = extract_features(
+                                raw_data, scanner_name="entropy"
+                            )
 
                             findings.append(
                                 Finding(
